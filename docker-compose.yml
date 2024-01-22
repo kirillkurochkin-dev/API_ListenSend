@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+
+  nats-streaming:
+    image: library/nats-streaming:latest
+    container_name: nats-streaming-l0
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+
+  postgres:
+    image: library/postgres:latest
+    container_name: postgres-l0
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: l0
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+  my-go-app:
+    build: .
+    ports:
+      - "8080:8080"
