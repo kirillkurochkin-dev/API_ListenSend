@@ -1,5 +1,6 @@
 package entity
 
+// Delivery represents delivery information.
 type Delivery struct {
 	Name    string `json:"name"`
 	Phone   string `json:"phone"`
@@ -7,5 +8,5 @@ type Delivery struct {
 	City    string `json:"city"`
 	Address string `json:"address"`
 	Region  string `json:"region"`
-	Email   string `json:"email"`
+	Email   string `json:"email" gorm:"foreignKey:CustomerId"`
 }

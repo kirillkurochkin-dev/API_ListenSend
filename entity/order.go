@@ -1,15 +1,17 @@
 package entity
 
-import "time"
+import (
+	"time"
+)
 
+// Order represents an order entity.
 type Order struct {
-	Id                int
 	OrderUid          string    `json:"order_uid"`
 	TrackNumber       string    `json:"track_number"`
 	Entry             string    `json:"entry"`
-	Delivery          Delivery  `json:"delivery"`
-	Payment           Payment   `json:"payment"`
-	Items             []Item    `json:"items"`
+	Delivery          Delivery  `json:"delivery" gorm:"foreignKey:Email"`
+	Payment           Payment   `json:"payment" gorm:"foreignKey:Transaction"`
+	Items             []Item    `json:"items" gorm:"foreignKey:TrackNumber"`
 	Locale            string    `json:"locale"`
 	InternalSignature string    `json:"internal_signature"`
 	CustomerId        string    `json:"customer_id"`
@@ -18,4 +20,11 @@ type Order struct {
 	SmId              int       `json:"sm_id"`
 	DateCreated       time.Time `json:"date_created"`
 	OffShard          string    `json:"off_shard"`
+}
+
+// NewOrder creates a new instance of Order.
+func NewOrder() Order {
+	return Order{
+		// Initialize default values if needed.
+	}
 }

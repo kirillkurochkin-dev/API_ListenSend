@@ -1,7 +1,8 @@
 package entity
 
+// Payment represents payment information.
 type Payment struct {
-	Transaction  string `json:"transaction"`
+	Transaction  string `json:"transaction" gorm:"foreignKey:OrderUid"`
 	RequestId    string `json:"request_id"`
 	Currency     string `json:"currency"`
 	Provider     string `json:"provider"`
