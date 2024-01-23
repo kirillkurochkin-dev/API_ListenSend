@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Details</title>
+</head>
+<body>
+<h1>Order Details</h1>
+<p>Order ID: {{ .Order.OrderUid }}</p>
+<p>Customer ID: {{ .Order.CustomerId }}</p>
+
+<h2>Delivery Information:</h2>
+<p>Name: {{ .Order.Delivery.Name }}</p>
+<p>Phone: {{ .Order.Delivery.Phone }}</p>
+<p>Zip: {{ .Order.Delivery.Zip }}</p>
+<p>City: {{ .Order.Delivery.City }}</p>
+<p>Address: {{ .Order.Delivery.Address }}</p>
+<p>Region: {{ .Order.Delivery.Region }}</p>
+<p>Email: {{ .Order.Delivery.Email }}</p>
+
+<h2>Payment Information:</h2>
+<p>Transaction: {{ .Order.Payment.Transaction }}</p>
+<p>Request ID: {{ .Order.Payment.RequestId }}</p>
+<p>Currency: {{ .Order.Payment.Currency }}</p>
+<p>Provider: {{ .Order.Payment.Provider }}</p>
+<p>Amount: {{ .Order.Payment.Amount }}</p>
+<p>Payment Date: {{ .Order.Payment.PaymentDt }}</p>
+<p>Bank: {{ .Order.Payment.Bank }}</p>
+<p>Delivery Cost: {{ .Order.Payment.DeliveryCost }}</p>
+<p>Goods Total: {{ .Order.Payment.GoodsTotal }}</p>
+<p>Custom Fee: {{ .Order.Payment.CustomFee }}</p>
+
+<h2>Items:</h2>
+<ul>
+    {{ range .Order.Items }}
+    <li>
+        <p>Name: {{ .Name }}</p>
+        <p>Price: {{ .Price }}</p>
+        <p>Size: {{ .Size }}</p>
+    </li>
+    {{ end }}
+</ul>
+
+<!-- Добавьте остальные поля Order по вашему усмотрению -->
+
+</body>
+</html>

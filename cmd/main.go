@@ -2,6 +2,7 @@ package main
 
 import (
 	"L0/entity"
+	"html/template"
 	"log"
 	"net/http"
 	"sync"
@@ -18,6 +19,12 @@ var (
 	orderCache map[string]entity.Order
 )
 
+var templates *template.Template
+
+func init() {
+	templates = template.Must(template.ParseGlob("templates/*.html"))
+}
+
 func main() {
 	initDB()
 	defer db.Close()
@@ -30,15 +37,47 @@ func main() {
 	go natsHandler.ConnectAndSubscribe()
 
 	router := gin.Default()
-	router.GET("/orders", getOrdersIds)
-	router.POST("/orders", start)
-	router.GET("/orders/:id", getOrderById)
-	router.DELETE("/orders", deleteAllRecords)
+	router.GET("api/orders", getOrdersIds)
+	router.POST("api/orders", start)
+	router.GET("api/orders/:id", getOrderById)
+	router.DELETE("api/orders", deleteAllRecords)
+
+	router.LoadHTMLGlob("templates/*.html")
+
+	router.GET("/order/:id", getOrderPage)
+	router.GET("/orders", getOrdersPage)
 
 	err = router.Run(":8080")
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func getOrderPage(c *gin.Context) {
+	orderID := c.Param("id")
+
+	cacheMutex.RLock()
+	defer cacheMutex.RUnlock()
+
+	order, found := orderCache[orderID]
+	if !found {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
+		return
+	}
+
+	c.HTML(http.StatusOK, "order.html", gin.H{"Order": order})
+}
+
+func getOrdersPage(c *gin.Context) {
+	cacheMutex.RLock()
+	defer cacheMutex.RUnlock()
+
+	var orders []entity.Order
+	for _, order := range orderCache {
+		orders = append(orders, order)
+	}
+
+	c.HTML(http.StatusOK, "orders.html", gin.H{"Orders": orders})
 }
 
 func initDB() {
@@ -128,15 +167,11 @@ func getOrderById(c *gin.Context) {
 }
 
 func getOrdersIds(c *gin.Context) {
-	var orders []entity.Order
-
-	if err := db.Find(&orders).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve orders"})
-		return
-	}
+	cacheMutex.RLock()
+	defer cacheMutex.RUnlock()
 
 	var ids []string
-	for _, order := range orders {
+	for _, order := range orderCache {
 		ids = append(ids, order.OrderUid)
 	}
 

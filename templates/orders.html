@@ -1,0 +1,17 @@
+<!-- Ваш файл templates/orders.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order List</title>
+</head>
+<body>
+<h1>Order List</h1>
+<ul>
+    {{ range .Orders }}
+    <li><a href="/order/{{ .OrderUid }}">{{ .OrderUid }}</a></li>
+    {{ end }}
+</ul>
+</body>
+</html>
