@@ -2,40 +2,34 @@ package main
 
 import (
 	"L0/entity"
-	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/postgres"
 	"log"
 	"net/http"
 	"sync"
+
+	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/postgres"
 )
 
-var db *gorm.DB
-var err error
-
-var cacheMutex sync.RWMutex
-var orderCache map[string]entity.Order
+var (
+	db         *gorm.DB
+	err        error
+	cacheMutex sync.RWMutex
+	orderCache map[string]entity.Order
+)
 
 func main() {
-	db, err = gorm.Open("postgres", "host=postgres-L0 port=5432 user=postgres dbname=l0 sslmode=disable password=postgres")
-
-	if err != nil {
-		log.Fatal(err)
-	}
+	initDB()
 	defer db.Close()
 
 	db.AutoMigrate(&entity.Order{}, &entity.Delivery{}, &entity.Item{}, &entity.Payment{})
 
-	//
 	restoreCacheFromDB()
-	//
 
-	natsHandler := NewNatsHandler(db)
-
+	natsHandler := NewNatsHandler(db, &orderCache, &cacheMutex)
 	go natsHandler.ConnectAndSubscribe()
-	router := gin.Default()
 
+	router := gin.Default()
 	router.GET("/orders", getOrdersIds)
 	router.POST("/orders", start)
 	router.GET("/orders/:id", getOrderById)
@@ -45,7 +39,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
 
+func initDB() {
+	db, err = gorm.Open("postgres", "host=postgres-L0 port=5432 user=postgres dbname=l0 sslmode=disable password=postgres")
+	if err != nil {
+		log.Fatal("Failed to connect to the database:", err)
+	}
 }
 
 func restoreCacheFromDB() {
@@ -57,12 +57,10 @@ func restoreCacheFromDB() {
 		return
 	}
 
-	var delivery entity.Delivery
-	var payment entity.Payment
-	var items []entity.Item
-
 	for _, order := range orders {
-		fmt.Println(order.OrderUid)
+		var delivery entity.Delivery
+		var payment entity.Payment
+		var items []entity.Item
 
 		db.Where("email = ?", order.CustomerId).First(&delivery)
 		db.Where("transaction = ?", order.OrderUid).First(&payment)
@@ -76,11 +74,11 @@ func restoreCacheFromDB() {
 	}
 
 	cacheMutex.Lock()
+	defer cacheMutex.Unlock()
 	orderCache = make(map[string]entity.Order)
 	for _, order := range ordersCopy {
 		orderCache[order.OrderUid] = order
 	}
-	cacheMutex.Unlock()
 
 	log.Println("Cache restored from DB")
 }
@@ -97,21 +95,34 @@ func getOrderById(c *gin.Context) {
 		return
 	}
 
-	var order entity.Order
-	var delivery entity.Delivery
-	var payment entity.Payment
-	var items []entity.Item
+	cacheMutex.RLock()
+	order, found := orderCache[orderID]
+	cacheMutex.RUnlock()
 
-	db.Where("order_uid = ?", orderID).First(&order)
-	db.Where("email = ?", order.CustomerId).First(&delivery)
-	db.Where("transaction = ?", orderID).First(&payment)
-	db.Where("track_number = ?", order.TrackNumber).Find(&items)
+	if !found {
+		var orderFromDB entity.Order
+		var delivery entity.Delivery
+		var payment entity.Payment
+		var items []entity.Item
 
-	order.Delivery = delivery
-	order.Payment = payment
-	order.Items = items
+		if err := db.Where("order_uid = ?", orderID).First(&orderFromDB).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
+			return
+		}
 
-	fmt.Println(order)
+		db.Where("email = ?", order.CustomerId).First(&delivery)
+		db.Where("transaction = ?", orderID).First(&payment)
+		db.Where("track_number = ?", order.TrackNumber).Find(&items)
+
+		orderFromDB.Delivery = delivery
+		orderFromDB.Payment = payment
+		orderFromDB.Items = items
+
+		cacheMutex.Lock()
+		defer cacheMutex.Unlock()
+		orderCache[orderFromDB.OrderUid] = orderFromDB
+		order = orderFromDB
+	}
 
 	c.JSON(http.StatusOK, order)
 }
@@ -119,10 +130,12 @@ func getOrderById(c *gin.Context) {
 func getOrdersIds(c *gin.Context) {
 	var orders []entity.Order
 
-	db.Find(&orders)
+	if err := db.Find(&orders).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve orders"})
+		return
+	}
 
 	var ids []string
-
 	for _, order := range orders {
 		ids = append(ids, order.OrderUid)
 	}
@@ -147,5 +160,10 @@ func deleteAllRecords(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete records"})
 		return
 	}
+
+	cacheMutex.Lock()
+	defer cacheMutex.Unlock()
+	orderCache = make(map[string]entity.Order)
+
 	c.JSON(http.StatusOK, gin.H{"message": "All records deleted successfully"})
 }

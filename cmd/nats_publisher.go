@@ -9,20 +9,16 @@ import (
 	"time"
 )
 
-// PublishOrder отправляет сообщение с заказом в канал nats-streaming
 func PublishOrder(orderData []byte) {
-	// Подключение к nats-streaming
 	nc, err := nats.Connect("nats://nats-streaming-l0:4222")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer nc.Close()
 
-	// Определение имени канала
 	channelName := "your_channel_name"
 
-	err = nc.Publish(channelName, orderData)
-	if err != nil {
+	if err := nc.Publish(channelName, orderData); err != nil {
 		log.Fatal(err)
 	}
 
@@ -88,7 +84,6 @@ func PublishStart() {
 		} else if i%3 == 0 {
 			orderBytes, _ = json.Marshal([]byte{'t'})
 		} else {
-
 			order.CustomerId = "test" + strconv.Itoa(i) + "@gmail.com"
 			order.Delivery.Email = "test" + strconv.Itoa(i) + "@gmail.com"
 
@@ -104,5 +99,4 @@ func PublishStart() {
 		}
 		PublishOrder(orderBytes)
 	}
-
 }

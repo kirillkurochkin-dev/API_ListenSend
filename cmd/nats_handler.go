@@ -1,10 +1,9 @@
-// nats_handler.go
 package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
+	"sync"
 
 	"L0/entity"
 	"github.com/jinzhu/gorm"
@@ -12,23 +11,25 @@ import (
 )
 
 type NatsHandler struct {
-	db *gorm.DB
+	db         *gorm.DB
+	orderCache *map[string]entity.Order
+	cacheMutex *sync.RWMutex
 }
 
-func NewNatsHandler(db *gorm.DB) *NatsHandler {
-	return &NatsHandler{db: db}
+func NewNatsHandler(db *gorm.DB, orderCache *map[string]entity.Order, cacheMutex *sync.RWMutex) *NatsHandler {
+	return &NatsHandler{db: db, orderCache: orderCache, cacheMutex: cacheMutex}
 }
 
 func (nh *NatsHandler) ConnectAndSubscribe() {
 	nc, err := nats.Connect("nats://nats-streaming-l0:4222")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Failed to connect to NATS:", err)
 	}
 	defer nc.Close()
 
 	_, err = nc.Subscribe("your_channel_name", nh.handleMessage)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Failed to subscribe to channel:", err)
 	}
 
 	log.Printf("Connected to NATS Streaming. Waiting for messages on channel 'your_channel_name'...")
@@ -45,31 +46,42 @@ func (nh *NatsHandler) handleMessage(msg *nats.Msg) {
 		return
 	}
 
-	err = nh.db.Save(&order).Error
-	fmt.Println(&order)
-	if err != nil {
+	if err := nh.saveToDatabase(&order); err != nil {
 		log.Println("Error saving to database:", err)
 		return
 	}
-	err = nh.db.Save(&order.Payment).Error
-	fmt.Println(&order.Payment)
-	if err != nil {
-		log.Println("Error saving to database:", err)
-		return
+
+	nh.cacheMutex.Lock()
+	(*nh.orderCache)[order.OrderUid] = order
+	nh.cacheMutex.Unlock()
+
+	log.Printf("Received and saved order with ID %d", order.OrderUid)
+}
+
+func (nh *NatsHandler) saveToDatabase(order *entity.Order) error {
+	tx := nh.db.Begin()
+
+	if err := tx.Save(order).Error; err != nil {
+		tx.Rollback()
+		return err
 	}
-	err = nh.db.Save(&order.Delivery).Error
-	fmt.Println(&order.Delivery)
-	if err != nil {
-		log.Println("Error saving to database:", err)
-		return
+
+	if err := tx.Save(&order.Payment).Error; err != nil {
+		tx.Rollback()
+		return err
 	}
-	for i := 0; i < len(order.Items); i++ {
-		err = nh.db.Save(&order.Items[i]).Error
-		if err != nil {
-			log.Println("Error saving to database:", err)
-			return
+
+	if err := tx.Save(&order.Delivery).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	for i := range order.Items {
+		if err := tx.Save(&order.Items[i]).Error; err != nil {
+			tx.Rollback()
+			return err
 		}
 	}
 
-	log.Printf("Received and saved order with ID %d", order.OrderUid)
+	return tx.Commit().Error
 }
