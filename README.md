@@ -22,17 +22,6 @@
 4. Приложение будет запущено на порту 8080 и готово принимать http-запросы.
 5. Спсиок доступных эндпоинтов предоставлен ниже.
 
-router := gin.Default()
-router.GET("api/orders", getOrdersIds)
-router.POST("api/orders", start)
-router.GET("api/orders/:id", getOrderById)
-router.DELETE("api/orders", deleteAllRecords)
-
-	router.LoadHTMLGlob("templates/*.html")
-
-router.GET("/order/:id", getOrderPage)
-router.GET("/orders", getOrdersPage)
-
 ### Эндпоинты API
 ---
 - GET    /api/orders - Получение данных обо всех ID заказов
